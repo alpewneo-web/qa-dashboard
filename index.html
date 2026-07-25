@@ -783,9 +783,32 @@ const isNoteLike = v => v !== '' && !/^https?:\/\//i.test(v);
 
 const isPercentLike = v => /^\d+(\.\d+)?%$/.test(v);
 
+// Google's gviz endpoint normally gives cellValue() a nicely formatted string ("f") for
+// a date cell, which is what lets isDateLike() match it. But if the source cell's number
+// format isn't actually a date format (e.g. someone pasted the date in as plain text/
+// General format), gviz sends no "f" value at all and cellValue() falls back to the raw
+// value — for a cell Sheets still treats as numeric underneath, that's the bare date
+// serial number ("46120") instead of a real date string. Recover the real date from it
+// here so a formatting quirk in the source sheet never becomes literal garbage in the
+// dashboard (and, worse, in the permanent Fail History log).
+function serialToDateString(v){
+  const n = Number(v);
+  if(!Number.isFinite(n) || n < 20000 || n > 80000) return null; // plausible Sheets-serial range
+  const ms = Math.round((n - 25569) * 86400 * 1000); // serial -> Unix ms (UTC midnight)
+  const d = new Date(ms);
+  const dd = String(d.getUTCDate()).padStart(2,'0');
+  const mm = String(d.getUTCMonth()+1).padStart(2,'0');
+  return `${dd}-${mm}-${d.getUTCFullYear()}`;
+}
+
 function parseSummary(grid){
   const scanEnd = Math.min(grid.length-1, 14);
-  const date = findFirst(grid, COL.DATE, 0, scanEnd, isDateLike);
+  let date = findFirst(grid, COL.DATE, 0, scanEnd, isDateLike);
+  if(!date){
+    const rawNumeric = findFirst(grid, COL.DATE, 0, scanEnd, isInt);
+    const recovered = rawNumeric ? serialToDateString(rawNumeric) : null;
+    if(recovered) date = recovered;
+  }
   const overallITS = findFirst(grid, COL.OVERALL_ITS, 0, scanEnd, isInt);
   const overallLS = findFirst(grid, COL.OVERALL_LS, 0, scanEnd, isInt);
   const pass = findFirst(grid, COL.PASS, 0, scanEnd, isInt);
