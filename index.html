@@ -317,7 +317,7 @@ function mergeBackendEntries(gameId, entries){
   // so any stale/duplicate entries left over in this browser's local cache (e.g. from
   // before a backend bug was fixed) get cleared out here instead of lingering forever.
   const gameLog = {};
-  entries.forEach(e => { if(e && e.tab && e.no !== undefined) gameLog[e.tab + '::' + e.no] = e; });
+  entries.forEach(e => { if(e && e.no !== undefined) gameLog[(e.patchDate||'') + '::' + e.no] = e; });
   all[gameId] = gameLog;
   saveFailHistory(all);
 }
@@ -364,14 +364,13 @@ function recordFailHistory(gameId, tab, detail, patchDate){
   const lsIdx = detail.headers.indexOf('Result (LS)');
   const noteIdx = detail.headers.indexOf('Note');
 
-  // "New Patch" is a moving target — the sheet reuses that literal tab name across many
-  // different actual patch cycles as work is in progress. Keying/storing entries under
-  // the literal word "New Patch" would make a later patch's Fail rows silently overwrite
-  // an earlier patch's Fail rows for the same No., defeating the point of a history that's
-  // meant to survive past patches. Once the real patch date is known, record under THAT
-  // instead — same value the panel already prefers for display via displayDate().
-  const isNewPatch = tab.trim().toLowerCase() === NEW_PATCH.toLowerCase();
-  const effectiveTab = (isNewPatch && patchDate && patchDate !== '-') ? patchDate : tab;
+  // Fail History no longer stores or keys on the sheet's tab name at all — only the
+  // resolved patch date. "New Patch" is a moving target (the same literal tab name gets
+  // reused across many different real patch cycles), and keeping a separate "tab" field
+  // around it was redundant with patchDate and the source of matching bugs. If the date
+  // can't be resolved yet, fall back to the raw tab name just so entries still have SOME
+  // stable identifier rather than colliding under a blank key.
+  const effectiveDate = (patchDate && patchDate !== '-') ? patchDate : tab;
 
   const all = loadFailHistory();
   const gameLog = all[gameId] || (all[gameId] = {});
@@ -381,10 +380,10 @@ function recordFailHistory(gameId, tab, detail, patchDate){
   detail.rows.forEach(row => {
     if((row[resultIdx] || '').trim().toLowerCase() !== 'fail') return;
     const no = row[0] || '';
-    const key = effectiveTab + '::' + no;
+    const key = effectiveDate + '::' + no;
     const existing = gameLog[key];
     gameLog[key] = {
-      no, tab: effectiveTab, patchDate: patchDate || '',
+      no, patchDate: effectiveDate,
       resultITS: row[resultIdx] || '',
       remark: remarkIdx !== -1 ? (row[remarkIdx] || '') : '',
       resultLS: lsIdx !== -1 ? (row[lsIdx] || '') : '',
@@ -577,22 +576,20 @@ function renderFailHistoryPanel(){
   updateFailHistoryBadge();
   if(!g){ failHistoryTableWrap.innerHTML = `<div class="empty-note">ยังไม่ได้เลือกเกม</div>`; return; }
 
-  // "แพท (แท็บ)" shows the same date the tab dropdown itself shows — for "New Patch"
-  // that's its own date cell (patchDate), not the literal tab name "New Patch"; for
-  // already-dated tabs patchDate and the tab name are normally the same value anyway.
-  const displayDate = e => e.patchDate || e.tab;
+  // Fail History no longer tracks a separate "tab" field at all — only the resolved
+  // patch date, which is what this column always displayed anyway.
+  const displayDate = e => e.patchDate || '-';
 
   let entries = failHistoryForGame(g.id);
   const q = (failHistorySearch.value || '').trim().toLowerCase();
-  if(q) entries = entries.filter(e => (e.no||'').toLowerCase().includes(q) || (e.tab||'').toLowerCase().includes(q) || displayDate(e).toLowerCase().includes(q));
-  // Newest patch date first (parsed from patchDate where possible, falling back to the
-  // tab name), then by No. within the same tab.
+  if(q) entries = entries.filter(e => (e.no||'').toLowerCase().includes(q) || displayDate(e).toLowerCase().includes(q));
+  // Newest patch date first (parsed from patchDate where possible), then by No.
   entries.sort((a,b) => {
     const da = parseTabDate(displayDate(a)), db = parseTabDate(displayDate(b));
     if(da && db && da.getTime() !== db.getTime()) return db - da;
     if(da && !db) return -1;
     if(!da && db) return 1;
-    if(a.tab !== b.tab) return a.tab.localeCompare(b.tab);
+    if(a.patchDate !== b.patchDate) return (a.patchDate||'').localeCompare(b.patchDate||'');
     return (Number(a.no) || 0) - (Number(b.no) || 0);
   });
 
