@@ -161,10 +161,10 @@
   <div class="panel hidden" id="managePanel">
     <h2>🔑 Google Sheets API key (สำหรับดึงรายชื่อแท็บทั้งหมดในชีทอัตโนมัติ)</h2>
     <div class="manage-row">
-      <input id="apiKeyInput" placeholder="วาง API key ที่นี่ (ไม่บังคับ — ไม่ใส่ก็เพิ่มแท็บเองได้ด้านล่าง)">
+      <input id="apiKeyInput" placeholder="มีคีย์กลางให้ใช้แล้ว — กรอกตรงนี้เฉพาะถ้าต้องการใช้คีย์ของคุณเอง">
       <button class="btn-primary" id="saveApiKeyBtn">บันทึกคีย์</button>
     </div>
-    <div class="meta">อ่านอย่างเดียว ฟรี ไม่ต้องผูกบัตรเครดิต — สร้างได้ที่ <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener">Google Cloud Console → เปิดใช้งาน Google Sheets API → Credentials → Create API key</a></div>
+    <div class="meta">ระบบมี API key กลางให้ใช้งานได้ทันทีโดยไม่ต้องตั้งค่าอะไร — ใส่คีย์ของคุณเองที่นี่เฉพาะถ้าต้องการแทนที่คีย์กลาง (อ่านอย่างเดียว ฟรี ไม่ต้องผูกบัตรเครดิต — สร้างได้ที่ <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener">Google Cloud Console → เปิดใช้งาน Google Sheets API → Credentials → Create API key</a>)</div>
 
     <h2 style="margin-top:20px;">จัดการรายชื่อเกม / ชีทข้อมูล</h2>
     <div class="manage-row">
@@ -199,10 +199,10 @@
 
   <div class="panel hidden" id="failHistoryPanel">
     <h2>📋 ประวัติเคสที่เคย Fail — <span id="failHistoryGameName">-</span></h2>
-    <div class="meta">เก็บไว้ถาวรแม้ progress จะครบ 100% แล้ว หรือเคสนั้นจะถูกแก้เป็น Pass ในภายหลัง — ข้อมูล Remark/Note ที่แสดงคือค่าล่าสุดตอนที่พบว่า Fail ในแท็บนั้นๆ</div>
+    <div class="meta">เก็บไว้ถาวรแม้ progress จะครบ 100% แล้ว หรือเคสนั้นจะถูกแก้เป็น Pass ในภายหลัง — ข้อมูล Remark/Note ที่แสดงคือค่าล่าสุดตอนที่พบว่า Fail ในแท็บนั้นๆ · <span id="failHistorySyncStatus"></span></div>
     <div class="manage-row" style="margin-top:10px;">
       <input id="failHistorySearch" placeholder="ค้นหาด้วย No. หรือชื่อแท็บ">
-      <button class="btn-ghost" id="clearFailHistoryBtn">🗑 ล้างประวัติของเกมนี้</button>
+      <button class="btn-ghost" id="clearFailHistoryBtn">🗑 ล้างประวัติของเกมนี้ (ทุกคน)</button>
     </div>
     <div id="failHistoryTableWrap" style="margin-top:12px;"></div>
   </div>
@@ -213,13 +213,34 @@ const STORAGE_KEY = 'cb_dashboard_games_v3';
 const API_KEY_STORAGE = 'cb_dashboard_sheets_api_key';
 const FAIL_HISTORY_STORAGE = 'cb_dashboard_fail_history_v1';
 const NEW_PATCH = 'New Patch';
+
+// Shared Fail History backend (Google Apps Script Web App, see Code.gs). When set, the
+// dashboard reads/writes Fail History through this endpoint so everyone using this page
+// sees the same log, instead of each browser only seeing what it personally recorded.
+// Left blank, Fail History quietly falls back to this-browser-only storage exactly like
+// before — nothing breaks if this hasn't been deployed/configured yet.
+const FAIL_HISTORY_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzeUNGSnJxbsnTtJLy2_2kB395n5H5IABKKhLgQv4DB8M52-yiS2LgIrMsCNOUcm2e4/exec';
+// Lightweight shared token sent with every write so casual/opportunistic requests to the
+// public endpoint URL are ignored. This is NOT real security (the token is visible in this
+// public file's source, same as any client-side secret) — it just filters out noise, since
+// Fail History only holds QA remarks/notes, not sensitive data. Must match TOKEN in Code.gs.
+const FAIL_HISTORY_TOKEN = 'cb-qa-dashboard-2026';
 const DEFAULT_GAMES = [
   { id:'pc-th', name:'PC-TH', sheetId:'1hSlTOBnPxfum8vUjR2V7aVWi5lzDHm2x6A0Dx38icig', tabs:['New Patch'], hiddenTabs:[] },
   { id:'pc-sea', name:'PC-SEA', sheetId:'1fZzINGuioOuHJ0bKGf6LLJXM2BfWCsyUgh3jRn-kT18', tabs:['New Patch'], hiddenTabs:[] }
 ];
 
-function loadApiKey(){ return localStorage.getItem(API_KEY_STORAGE) || ''; }
-function saveApiKey(key){ localStorage.setItem(API_KEY_STORAGE, key); }
+// Shared default key so every visitor gets working tab auto-discovery + No.-row links
+// out of the box, without pasting a key themselves. It's restricted in Google Cloud
+// Console to this site's domain + the Sheets API only (read-only), so it's safe to ship
+// in this public file. Anyone can still override it with their own key below, which is
+// saved locally and takes priority over this default.
+const DEFAULT_API_KEY = 'AIzaSyA2WQGi4kZHM3rcXWYHi--GlfiHX8eRuDA';
+function loadApiKey(){ return localStorage.getItem(API_KEY_STORAGE) || DEFAULT_API_KEY; }
+function saveApiKey(key){
+  if(key) localStorage.setItem(API_KEY_STORAGE, key);
+  else localStorage.removeItem(API_KEY_STORAGE); // falls back to the shared default key
+}
 
 // Ensures every game has tabs[]/hiddenTabs[] arrays and that "New Patch" is always
 // present (also migrates old single-`tab` records from an earlier version of this file).
@@ -273,6 +294,60 @@ function loadFailHistory(){
 }
 function saveFailHistory(data){ localStorage.setItem(FAIL_HISTORY_STORAGE, JSON.stringify(data)); }
 
+// ---- Shared backend sync (Google Apps Script, optional — see FAIL_HISTORY_ENDPOINT) ----
+// localStorage stays the source that renders instantly; the backend is what makes every
+// browser converge on the same data. Reads pull the backend's copy of a game's entries
+// and merge them into the local cache; writes push the same shape back out. Every call is
+// best-effort — a failed/offline request just leaves the local cache as the fallback, the
+// same behavior this dashboard already had before a backend existed.
+async function fetchFailHistoryFromBackend(gameId){
+  if(!FAIL_HISTORY_ENDPOINT) return null;
+  try{
+    const res = await fetch(`${FAIL_HISTORY_ENDPOINT}?gameId=${encodeURIComponent(gameId)}`);
+    if(!res.ok) return null;
+    const data = await res.json();
+    return (data && data.ok && Array.isArray(data.entries)) ? data.entries : null;
+  }catch(e){ return null; }
+}
+function mergeBackendEntries(gameId, entries){
+  if(!entries) return;
+  const all = loadFailHistory();
+  const gameLog = all[gameId] || (all[gameId] = {});
+  entries.forEach(e => { if(e && e.tab && e.no !== undefined) gameLog[e.tab + '::' + e.no] = e; });
+  saveFailHistory(all);
+}
+// Pulls the shared backend's copy of this game's history into the local cache — call
+// before rendering so entries other people's browsers recorded show up here too.
+async function syncFailHistoryFromBackend(gameId){
+  if(!FAIL_HISTORY_ENDPOINT || !gameId) return false;
+  const entries = await fetchFailHistoryFromBackend(gameId);
+  if(entries === null) return false;
+  mergeBackendEntries(gameId, entries);
+  return true;
+}
+async function pushFailHistoryEntry(gameId, entry){
+  if(!FAIL_HISTORY_ENDPOINT) return;
+  try{
+    // text/plain avoids a CORS preflight against the Apps Script endpoint (which can't
+    // answer OPTIONS requests); doPost() on the backend still parses it as JSON.
+    await fetch(FAIL_HISTORY_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action:'upsert', token:FAIL_HISTORY_TOKEN, gameId, entry })
+    });
+  }catch(e){ /* offline or blocked — local copy is already saved */ }
+}
+async function clearFailHistoryOnBackend(gameId){
+  if(!FAIL_HISTORY_ENDPOINT) return;
+  try{
+    await fetch(FAIL_HISTORY_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action:'clear', token:FAIL_HISTORY_TOKEN, gameId })
+    });
+  }catch(e){}
+}
+
 // Scans a freshly-parsed detail table for Fail rows and upserts each into the log.
 // Only ADDS/UPDATES entries — a case that was Fail and is now Pass on this same tab
 // simply stops being touched here, so its last-known-Fail snapshot stays in the log.
@@ -304,6 +379,9 @@ function recordFailHistory(gameId, tab, detail, patchDate){
       lastSeenAt: now
     };
     changed = true;
+    // Push to the shared backend too (fire-and-forget) so everyone else's dashboard
+    // converges on this same entry next time they sync — no-op if no endpoint is set.
+    pushFailHistoryEntry(gameId, gameLog[key]);
   });
 
   if(changed) saveFailHistory(all);
@@ -372,8 +450,11 @@ const failHistoryGameName = document.getElementById('failHistoryGameName');
 const failHistorySearch = document.getElementById('failHistorySearch');
 const failHistoryTableWrap = document.getElementById('failHistoryTableWrap');
 const clearFailHistoryBtn = document.getElementById('clearFailHistoryBtn');
+const failHistorySyncStatus = document.getElementById('failHistorySyncStatus');
 
-apiKeyInput.value = apiKey;
+// Only show a value in the box when the user has their own override saved — the shared
+// default key is used silently in the background and isn't echoed into this field.
+apiKeyInput.value = localStorage.getItem(API_KEY_STORAGE) || '';
 
 function currentGame(){ return games.find(g => g.id === selectedGameId) || null; }
 
@@ -457,9 +538,10 @@ function renderTabManageList(){
 manageBtn.addEventListener('click', ()=> managePanel.classList.toggle('hidden'));
 
 saveApiKeyBtn.addEventListener('click', ()=>{
-  apiKey = apiKeyInput.value.trim();
-  saveApiKey(apiKey);
-  showBanner('info', apiKey ? '✅ บันทึก API key แล้ว กด "อัปเดตข้อมูล" เพื่อดึงรายชื่อแท็บทั้งหมด' : 'ลบ API key ออกแล้ว (จะกลับไปใช้รายชื่อแท็บที่เพิ่มเองแทน)');
+  const entered = apiKeyInput.value.trim();
+  saveApiKey(entered);
+  apiKey = loadApiKey();
+  showBanner('info', entered ? '✅ บันทึกคีย์ของคุณแล้ว (ใช้แทนคีย์กลาง) กด "อัปเดตข้อมูล" เพื่อดึงรายชื่อแท็บทั้งหมด' : 'ลบคีย์ของคุณออกแล้ว — กลับไปใช้ API key กลางแทน');
 });
 
 function formatDateTime(iso){
@@ -534,23 +616,38 @@ function renderFailHistoryPanel(){
     </div>`;
 }
 
-failHistoryBtn.addEventListener('click', ()=>{
+failHistoryBtn.addEventListener('click', async ()=>{
   failHistoryPanel.classList.toggle('hidden');
   if(!failHistoryPanel.classList.contains('hidden')){
     renderFailHistoryPanel();
     // Panel now lives at the very bottom of the page — bring it into view instead of
     // leaving the user to scroll down and hunt for it after clicking the button.
     failHistoryPanel.scrollIntoView({ behavior:'smooth', block:'start' });
+    // Pull the shared backend's copy so entries other people's browsers recorded show
+    // up here too, then re-render with the merged result.
+    const g = currentGame();
+    if(g && FAIL_HISTORY_ENDPOINT){
+      failHistorySyncStatus.textContent = '🔄 กำลังซิงค์กับข้อมูลกลาง...';
+      const ok = await syncFailHistoryFromBackend(g.id);
+      failHistorySyncStatus.textContent = ok
+        ? '✅ ข้อมูลนี้ share ร่วมกันทุกคนที่ใช้แดชบอร์ดนี้'
+        : '⚠ ซิงค์กับข้อมูลกลางไม่สำเร็จ — แสดงเฉพาะข้อมูลในเครื่องนี้';
+      renderFailHistoryPanel();
+    } else {
+      failHistorySyncStatus.textContent = '';
+    }
   }
 });
 failHistorySearch.addEventListener('input', renderFailHistoryPanel);
-clearFailHistoryBtn.addEventListener('click', ()=>{
+clearFailHistoryBtn.addEventListener('click', async ()=>{
   const g = currentGame();
   if(!g) return;
-  if(!confirm(`ล้างประวัติ Fail ทั้งหมดของ "${g.name}" ใช่หรือไม่? การกระทำนี้ย้อนกลับไม่ได้`)) return;
+  const scope = FAIL_HISTORY_ENDPOINT ? 'ของทุกคนที่ใช้แดชบอร์ดนี้' : 'ในเครื่องนี้';
+  if(!confirm(`ล้างประวัติ Fail ทั้งหมดของ "${g.name}" ${scope} ใช่หรือไม่? การกระทำนี้ย้อนกลับไม่ได้`)) return;
   const all = loadFailHistory();
   delete all[g.id];
   saveFailHistory(all);
+  await clearFailHistoryOnBackend(g.id);
   renderFailHistoryPanel();
 });
 
@@ -1073,6 +1170,9 @@ async function fetchAndRender(){
     const colA = await colAFetch;
     const noRowMap = colA ? buildNoRowMap(detail.rows, colA) : null;
     renderReport(game, summary, detail, tab, noRowMap);
+    // Pull in whatever other browsers have already logged to the shared backend before
+    // recording this fetch's own Fail rows, so nothing gets clobbered either direction.
+    await syncFailHistoryFromBackend(game.id);
     // Log any Fail rows from this fetch into the permanent per-game history, then
     // refresh the badge count and (if the panel happens to be open) its table too.
     recordFailHistory(game.id, tab, detail, summary.date);
