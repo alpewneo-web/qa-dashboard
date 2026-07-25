@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CB Test Patch Report Dashboard</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#161d2e; --panel2:#1c2438; --border:#2a3350;
+    --text:#e8ecf7; --muted:#8b93ab; --accent:#5b8cff; --accent2:#7c5bff;
+    --green:#33d17a; --red:#ff5c5c; --yellow:#f7c948; --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:"Segoe UI",Sarabun,"Noto Sans Thai",system-ui,-apple-system,sans-serif;
+    background:linear-gradient(180deg,#0b0f19,#0f1420 30%); color:var(--text); min-height:100vh; padding:24px;
+  }
+  .wrap{max-width:1100px;margin:0 auto;}
+  header{display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:20px;}
+  h1{font-size:22px;margin:0 0 4px;}
+  .subtitle{color:var(--muted); font-size:13px;}
+  .toolbar{
+    display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px 16px; margin-bottom:18px;
+  }
+  select, input, button{
+    font-family:inherit; font-size:14px; border-radius:10px; border:1px solid var(--border);
+    background:var(--panel2); color:var(--text); padding:9px 12px; outline:none;
+  }
+  select{min-width:220px;}
+  button{cursor:pointer; transition:.15s; border:1px solid var(--accent);}
+  button:hover{filter:brightness(1.15);}
+  .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2)); border:none; font-weight:600; color:#fff;}
+  .btn-ghost{background:transparent; border:1px solid var(--border); color:var(--text);}
+  .btn-ghost:hover{border-color:var(--accent);}
+  .count-badge{display:inline-block; min-width:18px; padding:0 5px; margin-left:4px; border-radius:999px; background:var(--red); color:#fff; font-size:11px; font-weight:700; line-height:18px; text-align:center;}
+  .count-badge.zero{background:rgba(255,255,255,.12); color:var(--muted);}
+  .spacer{flex:1;}
+  .meta{font-size:12px; color:var(--muted);}
+  #manageBtn{margin-left:auto;}
+  .panel{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+    padding:18px 20px; margin-bottom:18px;
+  }
+  .panel h2{font-size:15px; margin:0 0 12px; color:var(--text);}
+  .manage-row{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;}
+  .manage-row input{flex:1; min-width:160px;}
+  .game-chip{
+    display:inline-flex; align-items:center; gap:8px; background:var(--panel2);
+    border:1px solid var(--border); border-radius:999px; padding:5px 6px 5px 12px; font-size:12px; margin:4px 6px 0 0;
+  }
+  .game-chip button{border:none; background:transparent; color:var(--muted); padding:2px 8px; border-radius:999px; font-size:13px;}
+  .game-chip button:hover{color:var(--red); background:rgba(255,92,92,.12);}
+  .hidden{display:none !important;}
+  .tab-row{display:flex; gap:8px; align-items:center; margin-bottom:16px; flex-wrap:wrap;}
+  .tab-btn{
+    background:var(--panel); border:1px solid var(--border); color:var(--muted);
+    padding:9px 18px; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer;
+  }
+  .tab-btn:hover{color:var(--text); border-color:var(--accent);}
+  .tab-btn.active{color:#fff; background:var(--panel2); border-color:var(--accent);}
+  .tab-btn.pinned::before{content:"📌 ";}
+  .tab-label{
+    display:inline-flex; align-items:center; background:var(--panel); border:1px solid var(--border);
+    color:var(--muted); padding:9px 18px; border-radius:10px; font-size:13px; font-weight:600; cursor:default;
+  }
+  .tab-label::before{content:"📌 ";}
+  #tabHistorySelect{min-width:200px;}
+  .tab-manage-list{display:flex; flex-wrap:wrap; gap:6px; margin:10px 0;}
+  .tab-chip{
+    display:inline-flex; align-items:center; gap:6px; background:var(--panel2);
+    border:1px solid var(--border); border-radius:999px; padding:5px 6px 5px 12px; font-size:12px;
+  }
+  .tab-chip button{border:none; background:transparent; color:var(--muted); padding:2px 8px; border-radius:999px; font-size:13px;}
+  .tab-chip button:hover{color:var(--red); background:rgba(255,92,92,.12);}
+  .tab-chip.pinned{opacity:.8;}
+  textarea{
+    font-family:inherit; font-size:13px; border-radius:10px; border:1px solid var(--border);
+    background:var(--panel2); color:var(--text); padding:9px 12px; outline:none; width:100%; min-height:60px; resize:vertical;
+  }
+  .status-banner{
+    padding:12px 16px; border-radius:10px; font-size:13px; margin-bottom:16px; display:flex; gap:10px; align-items:center;
+  }
+  .status-banner.error{background:rgba(255,92,92,.12); border:1px solid rgba(255,92,92,.4); color:#ffb0b0;}
+  .status-banner.info{background:rgba(91,140,255,.12); border:1px solid rgba(91,140,255,.4); color:#bcd0ff;}
+  .report-title{
+    font-size:18px; font-weight:700; text-align:center; padding:16px; letter-spacing:.5px;
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); margin-bottom:16px;
+  }
+  .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-bottom:16px;}
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:16px;}
+  .card .label{font-size:12px; color:var(--muted); margin-bottom:6px;}
+  .card .value{font-size:26px; font-weight:700;}
+  .card.pass .value{color:var(--green);}
+  .card.fail .value{color:var(--red);}
+  .card.drop .value{color:var(--yellow);}
+  .card.overall .value{color:var(--accent);}
+  .badge{display:inline-block; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600;}
+  .badge.progress{background:rgba(91,140,255,.15); color:#a9c1ff;}
+  .badge.done{background:rgba(51,209,122,.15); color:#7fe3ad;}
+  .badge.none{background:rgba(139,147,171,.15); color:var(--muted);}
+  .badge-finish{
+    display:inline-block; padding:4px 13px; border-radius:999px; font-size:13px; font-weight:800;
+    letter-spacing:.75px; background:linear-gradient(135deg,var(--green),#1fae5f); color:#04180c;
+    box-shadow:0 0 10px rgba(51,209,122,.5); vertical-align:middle;
+  }
+  .progress-panel{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; margin-bottom:16px;}
+  .progress-panel .row{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+  .progress-track{height:16px; border-radius:999px; background:var(--panel2); overflow:hidden; border:1px solid var(--border); display:flex;}
+  .progress-seg{height:100%; transition:width .4s ease;}
+  .progress-seg.pass{background:var(--green);}
+  .progress-seg.pass-ls{background:var(--accent);}
+  .progress-seg.fail{background:var(--red);}
+  .progress-seg.drop{background:var(--yellow);}
+  .progress-legend{display:flex; gap:16px; flex-wrap:wrap; margin-top:8px; font-size:12px; color:var(--muted);}
+  .progress-legend .dot{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px;}
+  .progress-legend .dot.pass{background:var(--green);}
+  .progress-legend .dot.pass-ls{background:var(--accent);}
+  .progress-legend .dot.fail{background:var(--red);}
+  .progress-legend .dot.drop{background:var(--yellow);}
+  .current-testcase{margin-top:12px; font-size:13px; color:var(--muted); white-space:pre-wrap;}
+  .table-panel{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px;}
+  .table-panel .row{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;}
+  .table-scroll{overflow:auto; max-height:520px; border:1px solid var(--border); border-radius:10px;}
+  table{border-collapse:collapse; width:100%; font-size:12.5px; min-width:600px;}
+  thead th{
+    position:sticky; top:0; background:#1e2740; color:var(--text); text-align:left; padding:9px 10px;
+    border-bottom:1px solid var(--border); white-space:nowrap; z-index:1;
+  }
+  tbody td{padding:8px 10px; border-bottom:1px solid rgba(255,255,255,.05); color:#d6dbec; max-width:260px; overflow:hidden; text-overflow:ellipsis; vertical-align:top;}
+  tbody tr:hover{background:rgba(91,140,255,.06);}
+  .status-cell.pass{color:var(--green); font-weight:600;}
+  .status-cell.fail{color:var(--red); font-weight:600;}
+  .no-link{color:var(--accent); text-decoration:none; font-weight:600;}
+  .no-link:hover{text-decoration:underline;}
+  .empty-note{color:var(--muted); font-size:13px; padding:20px; text-align:center;}
+  .loader{width:16px; height:16px; border-radius:50%; border:2px solid rgba(255,255,255,.25); border-top-color:#fff; animation:spin .7s linear infinite; display:inline-block;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  a{color:var(--accent);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Dashboard QA patch  Report</h1>
+      <div class="subtitle">รายงานความคืบหน้าการทดสอบ (ดึงข้อมูลสดจาก Google Sheets)</div>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <select id="gameSelect"></select>
+    <button class="btn-primary" id="updateBtn">⟳ อัปเดตข้อมูล</button>
+    <span class="meta" id="lastUpdated">ยังไม่เคยโหลดข้อมูล</span>
+    <div class="spacer"></div>
+    <button class="btn-ghost" id="failHistoryBtn">📋 ประวัติ Fail <span class="count-badge" id="failHistoryCount">0</span></button>
+    <button class="btn-ghost" id="manageBtn">⚙ จัดการเกม</button>
+  </div>
+
+  <div class="panel hidden" id="managePanel">
+    <h2>🔑 Google Sheets API key (สำหรับดึงรายชื่อแท็บทั้งหมดในชีทอัตโนมัติ)</h2>
+    <div class="manage-row">
+      <input id="apiKeyInput" placeholder="วาง API key ที่นี่ (ไม่บังคับ — ไม่ใส่ก็เพิ่มแท็บเองได้ด้านล่าง)">
+      <button class="btn-primary" id="saveApiKeyBtn">บันทึกคีย์</button>
+    </div>
+    <div class="meta">อ่านอย่างเดียว ฟรี ไม่ต้องผูกบัตรเครดิต — สร้างได้ที่ <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener">Google Cloud Console → เปิดใช้งาน Google Sheets API → Credentials → Create API key</a></div>
+
+    <h2 style="margin-top:20px;">จัดการรายชื่อเกม / ชีทข้อมูล</h2>
+    <div class="manage-row">
+      <input id="newGameName" placeholder="ชื่อเกมที่แสดง เช่น PC-TH">
+      <input id="newGameSheet" placeholder="ลิงก์ Google Sheet หรือ Sheet ID">
+      <input id="newGameTab" placeholder='ชื่อแท็บเริ่มต้น (ค่าเริ่มต้น "New Patch")'>
+      <button class="btn-primary" id="addGameBtn">+ เพิ่มเกม</button>
+    </div>
+    <div id="gameChips"></div>
+    <div class="meta" style="margin-top:8px;">ทุกเกมใหม่ต้องใช้โครงสร้างชีทแบบเดียวกับแท็บ "New Patch" ของ 2 เกมปัจจุบัน และต้องเปิดสิทธิ์การดูแบบ "ทุกคนที่มีลิงก์ (ดูได้)"</div>
+
+    <h2 style="margin-top:20px;">แท็บย้อนหลังของ <span id="manageTabsGameName">-</span></h2>
+    <div class="meta" style="margin-bottom:8px;">ถ้าตั้งค่า API key ไว้ รายชื่อแท็บจะถูกดึงมาอัตโนมัติทุกครั้งที่กด "อัปเดตข้อมูล" — หรือจะเพิ่มเองด้วยมือที่นี่ก็ได้</div>
+    <div class="manage-row">
+      <textarea id="newTabsInput" placeholder="วางชื่อแท็บวันที่ในชีท คั่นด้วย , หรือขึ้นบรรทัดใหม่ เช่น&#10;04-06-2026&#10;21-05-2026"></textarea>
+    </div>
+    <button class="btn-primary" id="addTabsBtn">+ เพิ่มแท็บ</button>
+    <div class="tab-manage-list" id="tabManageList"></div>
+    <div class="meta" style="margin-top:12px;">แท็บที่ซ่อนไว้ (กด ↺ เพื่อเอากลับมาแสดง)</div>
+    <div class="tab-manage-list" id="hiddenTabsList"></div>
+    <div class="meta" style="margin-top:8px;">แท็บ "New Patch" จะถูกปักหมุดไว้เป็นค่าเริ่มต้นแรกสุดเสมอและซ่อนไม่ได้ ส่วนแท็บวันที่อื่นๆ จะเรียงจากล่าสุดไปเก่าสุดให้อัตโนมัติในดรอปดาวน์</div>
+  </div>
+
+  <div class="tab-row">
+    <span class="tab-label" id="tabPrimaryBtn">Test Patch MA</span>
+    <select id="tabHistorySelect">
+      <option value="">ดูย้อนหลัง ▾</option>
+    </select>
+  </div>
+  <div id="statusBanner"></div>
+  <div id="reportRoot"></div>
+
+  <div class="panel hidden" id="failHistoryPanel">
+    <h2>📋 ประวัติเคสที่เคย Fail — <span id="failHistoryGameName">-</span></h2>
+    <div class="meta">เก็บไว้ถาวรแม้ progress จะครบ 100% แล้ว หรือเคสนั้นจะถูกแก้เป็น Pass ในภายหลัง — ข้อมูล Remark/Note ที่แสดงคือค่าล่าสุดตอนที่พบว่า Fail ในแท็บนั้นๆ</div>
+    <div class="manage-row" style="margin-top:10px;">
+      <input id="failHistorySearch" placeholder="ค้นหาด้วย No. หรือชื่อแท็บ">
+      <button class="btn-ghost" id="clearFailHistoryBtn">🗑 ล้างประวัติของเกมนี้</button>
+    </div>
+    <div id="failHistoryTableWrap" style="margin-top:12px;"></div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'cb_dashboard_games_v3';
+const API_KEY_STORAGE = 'cb_dashboard_sheets_api_key';
+const FAIL_HISTORY_STORAGE = 'cb_dashboard_fail_history_v1';
+const NEW_PATCH = 'New Patch';
+const DEFAULT_GAMES = [
+  { id:'pc-th', name:'PC-TH', sheetId:'1hSlTOBnPxfum8vUjR2V7aVWi5lzDHm2x6A0Dx38icig', tabs:['New Patch'], hiddenTabs:[] },
+  { id:'pc-sea', name:'PC-SEA', sheetId:'1fZzINGuioOuHJ0bKGf6LLJXM2BfWCsyUgh3jRn-kT18', tabs:['New Patch'], hiddenTabs:[] }
+];
+
+function loadApiKey(){ return localStorage.getItem(API_KEY_STORAGE) || ''; }
+function saveApiKey(key){ localStorage.setItem(API_KEY_STORAGE, key); }
+
+// Ensures every game has tabs[]/hiddenTabs[] arrays and that "New Patch" is always
+// present (also migrates old single-`tab` records from an earlier version of this file).
+function normalizeGame(g){
+  let tabs = Array.isArray(g.tabs) ? g.tabs.slice() : (g.tab ? [g.tab] : []);
+  tabs = tabs.map(t => String(t).trim()).filter(Boolean);
+  if(!tabs.some(t => t.toLowerCase() === NEW_PATCH.toLowerCase())) tabs.unshift(NEW_PATCH);
+  const hiddenTabs = Array.isArray(g.hiddenTabs) ? g.hiddenTabs.map(t=>String(t).trim()).filter(Boolean) : [];
+  // tab name -> Google Sheets gid (numeric per-tab sheet ID), used to deep-link a
+  // testcase's "No." straight to its row in the actual sheet tab. Only populated once
+  // an API-key sync has run at least once (see syncTabsFromApi); absent otherwise.
+  const tabGids = (g.tabGids && typeof g.tabGids === 'object') ? g.tabGids : {};
+  return { id:g.id, name:g.name, sheetId:g.sheetId, tabs, hiddenTabs, tabGids };
+}
+
+// Tabs actually shown to the user: the full tabs[] list minus anything hidden.
+function visibleTabs(g){
+  return sortTabs(g.tabs.filter(t => !g.hiddenTabs.some(h => h.toLowerCase() === t.toLowerCase())));
+}
+
+function loadGames(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw){ localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_GAMES)); return DEFAULT_GAMES.map(normalizeGame); }
+    const parsed = JSON.parse(raw);
+    const list = Array.isArray(parsed) && parsed.length ? parsed : DEFAULT_GAMES;
+    return list.map(normalizeGame);
+  }catch(e){ return DEFAULT_GAMES.map(normalizeGame); }
+}
+function saveGames(games){ localStorage.setItem(STORAGE_KEY, JSON.stringify(games)); }
+
+function extractSheetId(input){
+  input = input.trim();
+  const m = input.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if(m) return m[1];
+  return input;
+}
+
+// ---- Fail history log ----
+// Persists a permanent record of every testcase ever seen with Result (ITS) = Fail,
+// per game, even after the patch later reaches 100% and that same case turns Pass —
+// so the team can look back at what broke, when, and what the Remark/Note said at the
+// time, instead of that information disappearing once the sheet itself moves on.
+// Keyed by "tab::No." so the same testcase failing again in a later patch tab logs as
+// its own separate entry rather than overwriting the earlier one.
+function loadFailHistory(){
+  try{
+    const raw = localStorage.getItem(FAIL_HISTORY_STORAGE);
+    return raw ? JSON.parse(raw) : {};
+  }catch(e){ return {}; }
+}
+function saveFailHistory(data){ localStorage.setItem(FAIL_HISTORY_STORAGE, JSON.stringify(data)); }
+
+// Scans a freshly-parsed detail table for Fail rows and upserts each into the log.
+// Only ADDS/UPDATES entries — a case that was Fail and is now Pass on this same tab
+// simply stops being touched here, so its last-known-Fail snapshot stays in the log.
+function recordFailHistory(gameId, tab, detail, patchDate){
+  if(!detail.headers.length || !detail.rows.length) return;
+  const resultIdx = detail.headers.indexOf('Result (ITS)');
+  if(resultIdx === -1) return;
+  const remarkIdx = detail.headers.indexOf('Remark');
+  const lsIdx = detail.headers.indexOf('Result (LS)');
+  const noteIdx = detail.headers.indexOf('Note');
+
+  const all = loadFailHistory();
+  const gameLog = all[gameId] || (all[gameId] = {});
+  const now = new Date().toISOString();
+  let changed = false;
+
+  detail.rows.forEach(row => {
+    if((row[resultIdx] || '').trim().toLowerCase() !== 'fail') return;
+    const no = row[0] || '';
+    const key = tab + '::' + no;
+    const existing = gameLog[key];
+    gameLog[key] = {
+      no, tab, patchDate: patchDate || '',
+      resultITS: row[resultIdx] || '',
+      remark: remarkIdx !== -1 ? (row[remarkIdx] || '') : '',
+      resultLS: lsIdx !== -1 ? (row[lsIdx] || '') : '',
+      note: noteIdx !== -1 ? (row[noteIdx] || '') : '',
+      firstSeenAt: existing ? existing.firstSeenAt : now,
+      lastSeenAt: now
+    };
+    changed = true;
+  });
+
+  if(changed) saveFailHistory(all);
+}
+
+function failHistoryForGame(gameId){
+  const all = loadFailHistory();
+  return Object.values(all[gameId] || {});
+}
+
+// "New Patch" always pinned first; remaining tabs sorted newest date first (falls
+// back to alphabetical for names that don't match a recognized date format).
+// Handles both "dd-mm-yyyy" (e.g. 30-04-2026) and "MA dd.mm.yy" / "dd.mm.yy" style
+// tab names (e.g. "MA 03.07.25") seen across these sheets.
+function parseTabDate(name){
+  const s = name.trim();
+  let m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if(!m) m = s.match(/^(?:MA\s+)?(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/i);
+  if(!m) return null;
+  let year = Number(m[3]);
+  if(year < 100) year += 2000;
+  const d = new Date(year, Number(m[2])-1, Number(m[1]));
+  return isNaN(d.getTime()) ? null : d;
+}
+function sortTabs(tabs){
+  const npIdx = tabs.findIndex(t => t.trim().toLowerCase() === NEW_PATCH.toLowerCase());
+  const npName = npIdx >= 0 ? tabs[npIdx] : NEW_PATCH;
+  const rest = tabs.filter((t,i) => i !== npIdx);
+  rest.sort((a,b) => {
+    const da = parseTabDate(a), db = parseTabDate(b);
+    if(da && db) return db - da;
+    if(da && !db) return -1;
+    if(!da && db) return 1;
+    return a.localeCompare(b);
+  });
+  return [npName, ...rest];
+}
+
+let games = loadGames();
+let selectedGameId = games[0] ? games[0].id : null;
+let selectedTabName = NEW_PATCH;
+let apiKey = loadApiKey();
+
+const gameSelect = document.getElementById('gameSelect');
+const manageBtn = document.getElementById('manageBtn');
+const managePanel = document.getElementById('managePanel');
+const gameChips = document.getElementById('gameChips');
+const addGameBtn = document.getElementById('addGameBtn');
+const updateBtn = document.getElementById('updateBtn');
+const lastUpdated = document.getElementById('lastUpdated');
+const statusBanner = document.getElementById('statusBanner');
+const reportRoot = document.getElementById('reportRoot');
+const tabPrimaryBtn = document.getElementById('tabPrimaryBtn');
+const tabHistorySelect = document.getElementById('tabHistorySelect');
+const manageTabsGameName = document.getElementById('manageTabsGameName');
+const newTabsInput = document.getElementById('newTabsInput');
+const addTabsBtn = document.getElementById('addTabsBtn');
+const tabManageList = document.getElementById('tabManageList');
+const hiddenTabsList = document.getElementById('hiddenTabsList');
+const apiKeyInput = document.getElementById('apiKeyInput');
+const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
+const failHistoryBtn = document.getElementById('failHistoryBtn');
+const failHistoryCount = document.getElementById('failHistoryCount');
+const failHistoryPanel = document.getElementById('failHistoryPanel');
+const failHistoryGameName = document.getElementById('failHistoryGameName');
+const failHistorySearch = document.getElementById('failHistorySearch');
+const failHistoryTableWrap = document.getElementById('failHistoryTableWrap');
+const clearFailHistoryBtn = document.getElementById('clearFailHistoryBtn');
+
+apiKeyInput.value = apiKey;
+
+function currentGame(){ return games.find(g => g.id === selectedGameId) || null; }
+
+function renderGameSelect(){
+  gameSelect.innerHTML = games.map(g => `<option value="${g.id}" ${g.id===selectedGameId?'selected':''}>${escapeHtml(g.name)}</option>`).join('');
+}
+function renderChips(){
+  gameChips.innerHTML = games.map(g => `
+    <span class="game-chip">${escapeHtml(g.name)} <span class="meta">(${g.tabs.length} แท็บ)</span>
+      <button data-id="${g.id}" title="ลบเกมนี้">✕</button>
+    </span>`).join('');
+  gameChips.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.getAttribute('data-id');
+      games = games.filter(g=>g.id!==id);
+      saveGames(games);
+      const allFailHistory = loadFailHistory();
+      if(allFailHistory[id]){ delete allFailHistory[id]; saveFailHistory(allFailHistory); }
+      if(selectedGameId===id){ selectedGameId = games[0] ? games[0].id : null; selectedTabName = NEW_PATCH; }
+      renderGameSelect(); renderChips(); renderTabRow(); renderTabManageList();
+      updateFailHistoryBadge();
+      if(!failHistoryPanel.classList.contains('hidden')) renderFailHistoryPanel();
+      if(selectedGameId) fetchAndRender();
+      else { reportRoot.innerHTML=''; showBanner('info','ยังไม่มีเกมในระบบ กรุณาเพิ่มเกมก่อน'); }
+    });
+  });
+}
+
+// "Test Patch MA" is just a static label now (not clickable). New Patch itself lives
+// inside the dropdown as a real, selectable option — shown using its own date once
+// known — alongside every historical tab, so clicking it is what loads/updates the
+// New Patch report.
+function renderTabRow(){
+  const g = currentGame();
+  if(!g){ tabHistorySelect.innerHTML = ''; return; }
+  const visible = visibleTabs(g); // New Patch first, then dates newest-to-oldest
+  tabHistorySelect.innerHTML = visible.map(t => {
+    const isNewPatch = t.toLowerCase() === NEW_PATCH.toLowerCase();
+    const label = isNewPatch ? (g.newPatchDate || NEW_PATCH) : t;
+    return `<option value="${escapeHtml(t)}" ${t===selectedTabName?'selected':''}>${escapeHtml(label)}</option>`;
+  }).join('');
+}
+
+function renderTabManageList(){
+  const g = currentGame();
+  manageTabsGameName.textContent = g ? g.name : '-';
+  if(!g){ tabManageList.innerHTML=''; hiddenTabsList.innerHTML=''; return; }
+  const visible = visibleTabs(g);
+  tabManageList.innerHTML = visible.map(t => {
+    const isPinned = t.toLowerCase() === NEW_PATCH.toLowerCase();
+    return `<span class="tab-chip ${isPinned?'pinned':''}">${escapeHtml(t)}${isPinned ? '' : `<button data-tab="${escapeHtml(t)}" title="ซ่อนแท็บนี้">✕</button>`}</span>`;
+  }).join('');
+  tabManageList.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const g2 = currentGame();
+      if(!g2) return;
+      const name = btn.getAttribute('data-tab');
+      if(!g2.hiddenTabs.some(h=>h.toLowerCase()===name.toLowerCase())) g2.hiddenTabs.push(name);
+      saveGames(games);
+      if(selectedTabName === name) selectedTabName = NEW_PATCH;
+      renderTabManageList(); renderTabRow();
+      fetchAndRender();
+    });
+  });
+  hiddenTabsList.innerHTML = g.hiddenTabs.map(t => `
+    <span class="tab-chip">${escapeHtml(t)}
+      <button data-tab="${escapeHtml(t)}" title="เลิกซ่อน">↺</button>
+    </span>`).join('') || '<span class="meta">- ไม่มี -</span>';
+  hiddenTabsList.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const g2 = currentGame();
+      if(!g2) return;
+      const name = btn.getAttribute('data-tab');
+      g2.hiddenTabs = g2.hiddenTabs.filter(h => h.toLowerCase() !== name.toLowerCase());
+      saveGames(games);
+      renderTabManageList(); renderTabRow();
+    });
+  });
+}
+
+manageBtn.addEventListener('click', ()=> managePanel.classList.toggle('hidden'));
+
+saveApiKeyBtn.addEventListener('click', ()=>{
+  apiKey = apiKeyInput.value.trim();
+  saveApiKey(apiKey);
+  showBanner('info', apiKey ? '✅ บันทึก API key แล้ว กด "อัปเดตข้อมูล" เพื่อดึงรายชื่อแท็บทั้งหมด' : 'ลบ API key ออกแล้ว (จะกลับไปใช้รายชื่อแท็บที่เพิ่มเองแทน)');
+});
+
+function formatDateTime(iso){
+  if(!iso) return '-';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? '-' : d.toLocaleString('th-TH');
+}
+
+function updateFailHistoryBadge(){
+  const g = currentGame();
+  const count = g ? failHistoryForGame(g.id).length : 0;
+  failHistoryCount.textContent = String(count);
+  failHistoryCount.classList.toggle('zero', count === 0);
+}
+
+function renderFailHistoryPanel(){
+  const g = currentGame();
+  failHistoryGameName.textContent = g ? g.name : '-';
+  updateFailHistoryBadge();
+  if(!g){ failHistoryTableWrap.innerHTML = `<div class="empty-note">ยังไม่ได้เลือกเกม</div>`; return; }
+
+  // "แพท (แท็บ)" shows the same date the tab dropdown itself shows — for "New Patch"
+  // that's its own date cell (patchDate), not the literal tab name "New Patch"; for
+  // already-dated tabs patchDate and the tab name are normally the same value anyway.
+  const displayDate = e => e.patchDate || e.tab;
+
+  let entries = failHistoryForGame(g.id);
+  const q = (failHistorySearch.value || '').trim().toLowerCase();
+  if(q) entries = entries.filter(e => (e.no||'').toLowerCase().includes(q) || (e.tab||'').toLowerCase().includes(q) || displayDate(e).toLowerCase().includes(q));
+  // Newest patch date first (parsed from patchDate where possible, falling back to the
+  // tab name), then by No. within the same tab.
+  entries.sort((a,b) => {
+    const da = parseTabDate(displayDate(a)), db = parseTabDate(displayDate(b));
+    if(da && db && da.getTime() !== db.getTime()) return db - da;
+    if(da && !db) return -1;
+    if(!da && db) return 1;
+    if(a.tab !== b.tab) return a.tab.localeCompare(b.tab);
+    return (Number(a.no) || 0) - (Number(b.no) || 0);
+  });
+
+  if(!entries.length){
+    failHistoryTableWrap.innerHTML = `<div class="empty-note">${q ? 'ไม่พบผลลัพธ์ที่ตรงกับการค้นหา' : 'ยังไม่มีประวัติเคส Fail ที่บันทึกไว้สำหรับเกมนี้ — ระบบจะบันทึกอัตโนมัติทุกครั้งที่เปิดดูแท็บที่มีเคส Fail'}</div>`;
+    return;
+  }
+
+  const lsCls = v => {
+    const lower = (v||'').toLowerCase();
+    if(lower === 'pass') return 'status-cell pass';
+    if(lower === 'fail') return 'status-cell fail';
+    return '';
+  };
+
+  failHistoryTableWrap.innerHTML = `
+    <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>No.</th><th>แพท (แท็บ)</th><th>Result (ITS)</th><th>Remark</th><th>Result (LS)</th><th>Note</th><th>พบครั้งแรก</th><th>พบล่าสุด</th>
+        </tr></thead>
+        <tbody>
+          ${entries.map(e => `<tr>
+            <td>${escapeHtml(e.no) || '-'}</td>
+            <td>${escapeHtml(displayDate(e)) || '-'}</td>
+            <td class="status-cell fail">${escapeHtml(e.resultITS) || '-'}</td>
+            <td>${escapeHtml(e.remark) || '-'}</td>
+            <td class="${lsCls(e.resultLS)}">${escapeHtml(e.resultLS) || '-'}</td>
+            <td>${escapeHtml(e.note) || '-'}</td>
+            <td>${formatDateTime(e.firstSeenAt)}</td>
+            <td>${formatDateTime(e.lastSeenAt)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+failHistoryBtn.addEventListener('click', ()=>{
+  failHistoryPanel.classList.toggle('hidden');
+  if(!failHistoryPanel.classList.contains('hidden')){
+    renderFailHistoryPanel();
+    // Panel now lives at the very bottom of the page — bring it into view instead of
+    // leaving the user to scroll down and hunt for it after clicking the button.
+    failHistoryPanel.scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+});
+failHistorySearch.addEventListener('input', renderFailHistoryPanel);
+clearFailHistoryBtn.addEventListener('click', ()=>{
+  const g = currentGame();
+  if(!g) return;
+  if(!confirm(`ล้างประวัติ Fail ทั้งหมดของ "${g.name}" ใช่หรือไม่? การกระทำนี้ย้อนกลับไม่ได้`)) return;
+  const all = loadFailHistory();
+  delete all[g.id];
+  saveFailHistory(all);
+  renderFailHistoryPanel();
+});
+
+addGameBtn.addEventListener('click', ()=>{
+  const name = document.getElementById('newGameName').value.trim();
+  const sheetRaw = document.getElementById('newGameSheet').value.trim();
+  const tab = document.getElementById('newGameTab').value.trim() || NEW_PATCH;
+  if(!name || !sheetRaw){ showBanner('error','กรุณากรอกชื่อเกมและลิงก์/ID ของชีทให้ครบ'); return; }
+  const sheetId = extractSheetId(sheetRaw);
+  const id = name.toLowerCase().replace(/[^a-z0-9]+/g,'-') + '-' + Math.random().toString(36).slice(2,6);
+  games.push(normalizeGame({ id, name, sheetId, tabs:[tab] }));
+  saveGames(games);
+  document.getElementById('newGameName').value='';
+  document.getElementById('newGameSheet').value='';
+  document.getElementById('newGameTab').value='';
+  selectedGameId = id;
+  selectedTabName = NEW_PATCH;
+  renderGameSelect(); renderChips(); renderTabRow(); renderTabManageList();
+  fetchAndRender();
+});
+
+addTabsBtn.addEventListener('click', ()=>{
+  const g = currentGame();
+  if(!g){ showBanner('error','กรุณาเลือกหรือเพิ่มเกมก่อน'); return; }
+  const raw = newTabsInput.value.trim();
+  if(!raw) return;
+  const incoming = raw.split(/[\n,]/).map(s=>s.trim()).filter(Boolean);
+  incoming.forEach(name => {
+    if(!g.tabs.some(t => t.toLowerCase() === name.toLowerCase())) g.tabs.push(name);
+    // Adding a tab back by hand also un-hides it if it was previously hidden.
+    g.hiddenTabs = g.hiddenTabs.filter(h => h.toLowerCase() !== name.toLowerCase());
+  });
+  saveGames(games);
+  newTabsInput.value = '';
+  renderTabManageList(); renderTabRow(); renderChips();
+});
+
+gameSelect.addEventListener('change', ()=>{
+  selectedGameId = gameSelect.value;
+  selectedTabName = NEW_PATCH;
+  renderTabRow(); renderTabManageList();
+  fetchAndRender();
+});
+
+// "Test Patch MA" is a plain label now — no click handler. Picking any date in the
+// dropdown (including New Patch's own date) is what selects a tab and reloads it.
+tabHistorySelect.addEventListener('change', ()=>{
+  if(tabHistorySelect.value){
+    selectedTabName = tabHistorySelect.value;
+    renderTabRow();
+    fetchAndRender();
+  }
+});
+
+updateBtn.addEventListener('click', fetchAndRender);
+
+function showBanner(type, msg){
+  statusBanner.innerHTML = `<div class="status-banner ${type}">${msg}</div>`;
+}
+function clearBanner(){ statusBanner.innerHTML=''; }
+
+function escapeHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---- gviz cell value extraction ----
+// Prefers the formatted string ("f") since that matches what's actually shown in the
+// sheet (e.g. "04-06-2026" as plain text); falls back to the raw value ("v"), and
+// specially handles Google's serialized Date(year,month,day) constructor strings.
+function cellValue(c){
+  if(!c) return '';
+  if(c.f !== undefined && c.f !== null && c.f !== '') return String(c.f).trim();
+  if(c.v === undefined || c.v === null) return '';
+  if(typeof c.v === 'string' && c.v.indexOf('Date(') === 0){
+    const nums = (c.v.match(/-?\d+/g) || []).map(Number);
+    const [y,m,d] = nums;
+    if(y !== undefined && m !== undefined && d !== undefined){
+      return `${String(d).padStart(2,'0')}-${String(m+1).padStart(2,'0')}-${y}`;
+    }
+  }
+  return String(c.v).trim();
+}
+
+function colToIndex(letters){
+  let idx = 0;
+  for(const ch of letters) idx = idx*26 + (ch.toUpperCase().charCodeAt(0) - 64);
+  return idx - 1;
+}
+const COL = {
+  DATE: colToIndex('H'),
+  OVERALL_ITS: colToIndex('V'),
+  PASS: colToIndex('W'),
+  FAIL: colToIndex('X'),
+  DROP: colToIndex('Y'),
+  OVERALL_LS: colToIndex('AA'),
+  CURRENT_NOTE: colToIndex('AC'),
+  RESULT: colToIndex('U'),
+  // Detail-table columns anchored by fixed letter position rather than header text —
+  // some tabs (e.g. the live "New Patch" tab before it's archived) leave these header
+  // cells blank even though the column itself is reserved and used at the same position
+  // in every tab, so searching by label text is unreliable while the position is not.
+  REMARK: colToIndex('X'),
+  RECHECK_LS: colToIndex('Z'),
+  NOTE: colToIndex('AA')
+};
+
+function cell(grid, r, c){
+  return (grid[r] && grid[r][c] !== undefined) ? grid[r][c] : '';
+}
+
+function findFirst(grid, colIdx, rowStart, rowEnd, predicate){
+  for(let r=rowStart; r<=rowEnd && r<grid.length; r++){
+    const v = cell(grid, r, colIdx);
+    if(predicate(v)) return v;
+  }
+  return '';
+}
+
+const isInt = v => /^\d+$/.test(v);
+const isDateLike = v => /\d{1,2}-\d{1,2}-\d{2,4}/.test(v);
+const isNoteLike = v => v !== '' && !/^https?:\/\//i.test(v);
+
+const isPercentLike = v => /^\d+(\.\d+)?%$/.test(v);
+
+function parseSummary(grid){
+  const scanEnd = Math.min(grid.length-1, 14);
+  const date = findFirst(grid, COL.DATE, 0, scanEnd, isDateLike);
+  const overallITS = findFirst(grid, COL.OVERALL_ITS, 0, scanEnd, isInt);
+  const overallLS = findFirst(grid, COL.OVERALL_LS, 0, scanEnd, isInt);
+  const pass = findFirst(grid, COL.PASS, 0, scanEnd, isInt);
+  const fail = findFirst(grid, COL.FAIL, 0, scanEnd, isInt);
+  const drop = findFirst(grid, COL.DROP, 0, scanEnd, isInt);
+  const currentNote = findFirst(grid, COL.CURRENT_NOTE, 0, scanEnd, isNoteLike);
+  // The sheet keeps its own manually-tracked progress percentage in the same columns as
+  // Overall (ITS)/Overall (LS), just on a different row (a "57%"-style cell rather than
+  // the plain integer count). Read it directly instead of deriving our own number, since
+  // the sheet's figure doesn't always agree with a simple pass/fail/drop calculation.
+  const itsPercentRaw = findFirst(grid, COL.OVERALL_ITS, 0, scanEnd, isPercentLike);
+  const lsPercentRaw = findFirst(grid, COL.OVERALL_LS, 0, scanEnd, isPercentLike);
+  return {
+    date: date || '-',
+    overallITS: overallITS === '' ? 0 : parseInt(overallITS,10),
+    overallLS: overallLS === '' ? 0 : parseInt(overallLS,10),
+    pass: pass === '' ? 0 : parseInt(pass,10),
+    fail: fail === '' ? 0 : parseInt(fail,10),
+    drop: drop === '' ? 0 : parseInt(drop,10),
+    currentNote: currentNote || '',
+    itsPercentSheet: itsPercentRaw === '' ? null : Math.round(parseFloat(itsPercentRaw)),
+    lsPercentSheet: lsPercentRaw === '' ? null : Math.round(parseFloat(lsPercentRaw))
+  };
+}
+
+// Curated column order for the report table — deliberately not a 1:1 mirror of the
+// sheet's raw column order. Each column is anchored to its fixed letter position (via
+// COL) rather than found by searching header text, because some tabs (notably the live
+// "New Patch" tab, before it's filled in / archived to a dated tab) leave these header
+// cells blank even though the column itself is reserved at the same position in every
+// tab — the position is reliable, the label text is not.
+const WANTED_COLUMNS = [
+  { label:'No.',          col: 0 },
+  { label:'Result (ITS)', col: COL.RESULT },
+  { label:'Remark',       col: COL.REMARK },
+  { label:'Result (LS)',  col: COL.RECHECK_LS },
+  { label:'Note',         col: COL.NOTE },
+];
+
+function parseDetailTable(grid){
+  // Anchored on the "Result" header cell (column U) rather than "Test ID" in column A —
+  // some sheets leave the very first header cell blank (row numbers with no label),
+  // which would otherwise make the table go undetected entirely.
+  const headerRowIdx = grid.findIndex(row => (row[COL.RESULT]||'').trim().toLowerCase() === 'result');
+  if(headerRowIdx === -1) return { headers:[], rows:[], passCount:null, lsPass:null, lsFail:null };
+
+  const headers = WANTED_COLUMNS.map(w => w.label);
+  const colIncluded = WANTED_COLUMNS.map(w => w.col);
+
+  const dataStart = headerRowIdx + 2;
+  const rows = [];
+  let blankStreak = 0;
+  for(let r=dataStart; r<grid.length; r++){
+    const rowArr = grid[r] || [];
+    // A row only counts as a real testcase if it actually has a No. (column A) — some
+    // rows past the last real case carry leftover notes (e.g. a stray Remark) with no
+    // No., which would otherwise inflate the case count past what "No." actually goes up to.
+    const hasNo = (rowArr[0] || '').trim() !== '';
+    if(!hasNo){ blankStreak++; if(blankStreak>=5) break; continue; }
+    blankStreak = 0;
+    rows.push(colIncluded.map(c => (rowArr[c]||'').replace(/\n/g,' ').trim()));
+  }
+
+  // The summary block's Pass cell isn't always kept up to date by hand (e.g. it can be
+  // left blank even when Fail/Drop are filled in), so the authoritative Pass count is
+  // derived by counting Result (ITS)="Pass" rows directly from the testcase table instead.
+  const resultColIdx = headers.indexOf('Result (ITS)');
+  const passCount = resultColIdx === -1 ? null :
+    rows.reduce((n,row) => n + ((row[resultColIdx]||'').toLowerCase() === 'pass' ? 1 : 0), 0);
+
+  // LS (live server) has no separate Pass/Fail summary cells at all — its per-case
+  // recheck outcome only lives in the "Result (LS)" (sheet's "Recheck in LS") column.
+  const lsColIdx = headers.indexOf('Result (LS)');
+  const lsPass = lsColIdx === -1 ? null :
+    rows.reduce((n,row) => n + ((row[lsColIdx]||'').toLowerCase() === 'pass' ? 1 : 0), 0);
+  const lsFail = lsColIdx === -1 ? null :
+    rows.reduce((n,row) => n + ((row[lsColIdx]||'').toLowerCase() === 'fail' ? 1 : 0), 0);
+
+  return { headers, rows, passCount, lsPass, lsFail };
+}
+
+// A synthetic gviz header row has cells whose text is just their own 1-based column
+// position ("","2","3","4",... — column A's own label is blank, B="2", C="3", etc.).
+// A real data row essentially never matches that pattern by coincidence.
+function looksLikeSyntheticHeaderRow(row){
+  if(!row || row.length < 5) return false;
+  let checked = 0, matches = 0;
+  for(let i=1; i<Math.min(row.length,10); i++){
+    if(row[i] === '') continue;
+    checked++;
+    if(row[i] === String(i+1)) matches++;
+  }
+  return checked >= 3 && matches === checked;
+}
+
+// Loaded as a <script> tag (JSONP), not fetch() — this is the standard technique for
+// reading a public Google Sheet from a local/static HTML file. A plain fetch() to
+// docs.google.com from a file:// page gets blocked by the browser before Google's own
+// CORS headers ever come into play, so JSONP is the reliable path here.
+function fetchSheetGrid(sheetId, tab){
+  return new Promise((resolve, reject) => {
+    const cbName = 'gvizCb_' + Math.random().toString(36).slice(2);
+    let settled = false;
+    const timer = setTimeout(() => {
+      if(settled) return; settled = true;
+      cleanup();
+      reject(new Error('หมดเวลารอข้อมูลจาก Google Sheets (เช็คการเชื่อมต่ออินเทอร์เน็ต)'));
+    }, 15000);
+    const script = document.createElement('script');
+    function cleanup(){
+      clearTimeout(timer);
+      delete window[cbName];
+      if(script.parentNode) script.parentNode.removeChild(script);
+    }
+    window[cbName] = (resp) => {
+      if(settled) return; settled = true;
+      cleanup();
+      try{
+        if(!resp || resp.status === 'error'){
+          const msg = (resp && resp.errors && resp.errors[0] && resp.errors[0].detailed_message) || 'ไม่พบชีทหรือแท็บที่ระบุ';
+          reject(new Error(msg));
+          return;
+        }
+        const table = resp.table || {};
+        const grid = (table.rows || []).map(row => (row.c || []).map(c => cellValue(c)));
+        // Google's gviz endpoint sometimes injects a synthetic first row of column-
+        // position labels ("","2","3","4"...) when it can't detect a clean header row —
+        // but only sometimes; it's inconsistent between sheets/tabs and isn't always
+        // present. Only drop it when it's actually there, or a real first row (e.g. this
+        // tab's own date row) gets wrongly discarded instead.
+        if(looksLikeSyntheticHeaderRow(grid[0])) grid.shift();
+        resolve(grid);
+      }catch(err){ reject(err); }
+    };
+    script.src = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json;responseHandler:${cbName}&sheet=${encodeURIComponent(tab)}`;
+    script.onerror = () => {
+      if(settled) return; settled = true;
+      cleanup();
+      reject(new Error('โหลดข้อมูลจาก Google Sheets ไม่สำเร็จ ตรวจสอบว่าชีทเปิดสิทธิ์ "ทุกคนที่มีลิงก์ (ดูได้)" และการเชื่อมต่ออินเทอร์เน็ต'));
+    };
+    document.head.appendChild(script);
+  });
+}
+
+// Sheets API v4 (not gviz) — this needs an API key but properly supports CORS from any
+// origin including file://, and is the only way to list every tab in a spreadsheet
+// without the sheet owner separately "publishing to the web".
+async function fetchTabTitles(sheetId){
+  // sheetId here means the numeric gid of that tab (Google's own per-tab identifier) —
+  // fetched alongside the title so a testcase row can be deep-linked straight to it.
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}?key=${encodeURIComponent(apiKey)}&fields=sheets.properties.title,sheets.properties.sheetId`;
+  const res = await fetch(url);
+  if(!res.ok){
+    let msg = 'HTTP ' + res.status;
+    try{ const j = await res.json(); if(j && j.error && j.error.message) msg = j.error.message; }catch(e){}
+    throw new Error(msg);
+  }
+  const data = await res.json();
+  return (data.sheets || [])
+    .map(s => s.properties)
+    .filter(p => p && p.title)
+    .map(p => ({ title: p.title, gid: p.sheetId }));
+}
+
+// Merges freshly-discovered tab titles into the game's tabs[] (additive only — never
+// deletes a tab the user already has, even if it briefly disappears from an API
+// response). Returns a small status object fetchAndRender() uses for banner text.
+async function syncTabsFromApi(game){
+  if(!apiKey) return { skipped:true };
+  try{
+    const sheetsInfo = await fetchTabTitles(game.sheetId);
+    if(!sheetsInfo.length) return { ok:true, added:0 };
+    // Fully replace the tracked tab list with what's actually in the sheet right now —
+    // tabs get renamed/deleted over time, and only ever adding (never removing) left
+    // stale/renamed tabs piling up alongside their live replacements. Manually-hidden
+    // tabs stay hidden; genuinely new tabs since the last sync are what "added" counts.
+    const before = new Set(game.tabs.map(t => t.toLowerCase()));
+    const seen = new Set();
+    const fresh = [];
+    const tabGids = {};
+    sheetsInfo.forEach(({title, gid}) => {
+      const key = title.toLowerCase();
+      if(!seen.has(key)){ seen.add(key); fresh.push(title); }
+      if(gid !== undefined) tabGids[title] = gid;
+    });
+    if(!fresh.some(t => t.toLowerCase() === NEW_PATCH.toLowerCase())) fresh.unshift(NEW_PATCH);
+    const added = fresh.filter(t => !before.has(t.toLowerCase())).length;
+    game.tabs = fresh;
+    game.tabGids = tabGids;
+    saveGames(games);
+    return { ok:true, added };
+  }catch(err){
+    return { ok:false, error: err.message || String(err) };
+  }
+}
+
+// Ground-truth row numbers for a "No." -> exact sheet row deep link. gviz (used for the
+// main grid) can inject an extra synthetic row ahead of the real data on some tabs
+// (see looksLikeSyntheticHeaderRow) which throws off any row number computed purely by
+// counting array positions. The Sheets API v4 values.get endpoint has no such quirk —
+// index 0 of its response is always real sheet row 1 — so column A is fetched
+// separately through it and each testcase's own "No." text is matched against it
+// directly, sidestepping the guesswork entirely. Requires the same API key as tab
+// auto-discovery.
+async function fetchColumnA(sheetId, tab){
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(tab)}!A:A?key=${encodeURIComponent(apiKey)}`;
+  const res = await fetch(url);
+  if(!res.ok){
+    let msg = 'HTTP ' + res.status;
+    try{ const j = await res.json(); if(j && j.error && j.error.message) msg = j.error.message; }catch(e){}
+    throw new Error(msg);
+  }
+  const data = await res.json();
+  return (data.values || []).map(row => (row && row[0] !== undefined) ? String(row[0]).trim() : '');
+}
+
+// Maps each testcase row's own "No." text to its real 1-based sheet row, by walking
+// column A in sheet order alongside the already-parsed testcase rows (also in sheet
+// order) and matching each one to the next occurrence of that same text — this stays
+// correct even in the unlikely case that a "No." value repeats.
+function buildNoRowMap(detailRows, colA){
+  const map = {};
+  let searchFrom = 0;
+  detailRows.forEach(row => {
+    const no = row[0];
+    let idx = colA.indexOf(no, searchFrom);
+    if(idx === -1) idx = colA.indexOf(no);
+    if(idx !== -1){ map[no] = idx + 1; searchFrom = idx + 1; }
+  });
+  return map;
+}
+
+// Stacked color bar — Pass/Fail/Drop are each drawn as their own share of `denominator`
+// (visually showing true proportions, Fail included), independent of the "progress %"
+// text shown above the bar. The sheet excludes Fail from that % number, but the bar
+// itself still shows it as a segment like before. `denominator` is never allowed to be
+// smaller than what's actually counted, so segments can't overflow past 100% of the track.
+function progressBarHtml(pass, fail, drop, denominator, passClass='pass'){
+  const total = Math.max(denominator, pass + fail + drop);
+  if(!total) return `<div class="progress-track"></div>`;
+  const pct = n => Math.max(0, Math.min(100, (n / total) * 100));
+  return `<div class="progress-track">
+    <div class="progress-seg ${passClass}" style="width:${pct(pass)}%"></div>
+    <div class="progress-seg fail" style="width:${pct(fail)}%"></div>
+    <div class="progress-seg drop" style="width:${pct(drop)}%"></div>
+  </div>`;
+}
+
+function renderReport(game, summary, detail, tab, noRowMap){
+  const resolved = summary.pass + summary.fail + summary.drop;
+  // Prefer the sheet's own manually-tracked "NN%" cell; only fall back to computing it
+  // when that cell is genuinely absent (e.g. a fresh sheet). Matching the sheet's own
+  // convention, Fail cases are excluded from the progress calculation entirely.
+  const percent = summary.itsPercentSheet !== null ? summary.itsPercentSheet :
+    (summary.overallITS > 0 ? Math.min(100, Math.round(((summary.pass + summary.drop) / summary.overallITS) * 100)) : 0);
+  let statusBadge;
+  if(summary.overallITS === 0 && resolved === 0){
+    statusBadge = `<span class="badge none">ยังไม่มีข้อมูล</span>`;
+  } else if(percent >= 100){
+    statusBadge = `<span class="badge done">ทดสอบครบแล้ว</span>`;
+  } else {
+    statusBadge = `<span class="badge progress">กำลังทดสอบ (In Progress)</span>`;
+  }
+
+  // LS recheck outcomes are measured against the same total case pool as ITS (Overall
+  // (LS) turned out to track something else and isn't a reliable percentage denominator
+  // — verified against real sheet data where lsPass/Overall(ITS) matched the sheet's own
+  // LS% cell exactly). Fail is excluded from the numerator here too.
+  const lsDenominator = summary.overallITS > 0 ? summary.overallITS : summary.overallLS;
+  const lsPercent = summary.lsPercentSheet !== null ? summary.lsPercentSheet :
+    (lsDenominator > 0 ? Math.min(100, Math.round((summary.lsPass / lsDenominator) * 100)) : 0);
+
+  const titleText = `${game.name} Test Patch MA ${summary.date}`;
+
+  let tableHtml;
+  if(detail.headers.length && detail.rows.length){
+    // A testcase's "No." can only be deep-linked to its exact row once we know both that
+    // tab's gid (Google's numeric per-tab sheet ID, from syncTabsFromApi) and its real
+    // sheet row (from noRowMap, built via fetchColumnA/buildNoRowMap in fetchAndRender —
+    // ground-truth, not guessed from array position). Without either, No. is plain text.
+    const gid = game.tabGids ? game.tabGids[tab] : undefined;
+    tableHtml = `
+      <div class="table-scroll">
+        <table>
+          <thead><tr>${detail.headers.map(h=>`<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>
+          <tbody>
+            ${detail.rows.map((row) => `<tr>${row.map((v,i)=>{
+              const lower = v.toLowerCase();
+              let cls = '';
+              if(detail.headers[i] && (detail.headers[i].toLowerCase().includes('status') || detail.headers[i].toLowerCase().includes('result'))){
+                if(lower.includes('pass') || lower.includes('done')) cls='status-cell pass';
+                else if(lower.includes('fail')) cls='status-cell fail';
+              }
+              const rowNum = noRowMap ? noRowMap[v] : undefined;
+              if(i === 0 && gid !== undefined && rowNum !== undefined){
+                const url = `https://docs.google.com/spreadsheets/d/${game.sheetId}/edit#gid=${gid}&range=A${rowNum}`;
+                return `<td class="${cls}"><a class="no-link" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(v) || '-'}</a></td>`;
+              }
+              return `<td class="${cls}">${escapeHtml(v) || '-'}</td>`;
+            }).join('')}</tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } else {
+    tableHtml = `<div class="empty-note">ยังไม่มีรายละเอียด Testcase ในแท็บ "${escapeHtml(tab)}" ของชีทนี้</div>`;
+  }
+
+  reportRoot.innerHTML = `
+    <div class="report-title">${escapeHtml(titleText)}</div>
+    <div class="cards">
+      <div class="card"><div class="label">Overall (ITS)</div><div class="value">${summary.overallITS}</div></div>
+      <div class="card pass"><div class="label">Pass</div><div class="value">${summary.pass}</div></div>
+      <div class="card fail"><div class="label">Fail</div><div class="value">${summary.fail}</div></div>
+      <div class="card drop"><div class="label">Drop</div><div class="value">${summary.drop}</div></div>
+      <div class="card overall"><div class="label">Overall (LS)</div><div class="value">${summary.overallLS}</div></div>
+    </div>
+    <div class="progress-panel">
+      <div class="row">
+        <div><strong>Progress (ITS)</strong> ${statusBadge}</div>
+        <div class="meta">${percent}%</div>
+      </div>
+      ${progressBarHtml(summary.pass, summary.fail, summary.drop, summary.overallITS)}
+      <div class="progress-legend">
+        <span><span class="dot pass"></span>Pass ${summary.pass}</span>
+        <span><span class="dot fail"></span>Fail ${summary.fail}</span>
+        <span><span class="dot drop"></span>Drop ${summary.drop}</span>
+      </div>
+      ${summary.currentNote ? `<div class="current-testcase">📌 ${escapeHtml(summary.currentNote)}</div>` : ''}
+    </div>
+    <div class="progress-panel">
+      <div class="row">
+        <div><strong>Progress (LS)</strong> ${lsPercent >= 100 ? `<span class="badge-finish">FINISH</span>` : ''}</div>
+        <div class="meta">${lsPercent}%</div>
+      </div>
+      ${progressBarHtml(summary.lsPass, summary.lsFail, 0, lsDenominator, 'pass-ls')}
+      <div class="progress-legend">
+        <span><span class="dot pass-ls"></span>Pass ${summary.lsPass}</span>
+        <span><span class="dot fail"></span>Fail ${summary.lsFail}</span>
+      </div>
+    </div>
+    <div class="table-panel">
+      <div class="row">
+        <h2 style="margin:0;font-size:15px;">รายละเอียด Testcase (คลิกที่ No. เพื่อดู Test Detail)</h2>
+        <span class="meta">${detail.rows.length} เคส</span>
+      </div>
+      ${tableHtml}
+    </div>
+  `;
+}
+
+async function fetchAndRender(){
+  const game = currentGame();
+  if(!game) return;
+  clearBanner();
+  updateBtn.disabled = true;
+  updateBtn.innerHTML = `<span class="loader"></span> กำลังอัปเดต...`;
+
+  let syncMsg = null;
+  const sync = await syncTabsFromApi(game);
+  if(sync.skipped){
+    syncMsg = { type:'info', text:'ยังไม่ได้ตั้งค่า Google Sheets API key จึงดึงรายชื่อแท็บอัตโนมัติไม่ได้ — เพิ่มคีย์ได้ที่ "⚙ จัดการเกม" (หรือเพิ่มแท็บเองด้านล่างไปก่อนได้)' };
+  } else if(!sync.ok){
+    syncMsg = { type:'error', text:`⚠ ดึงรายชื่อแท็บอัตโนมัติไม่สำเร็จ — ${escapeHtml(sync.error)}` };
+  }
+  renderTabRow(); renderTabManageList(); renderChips();
+
+  const tab = selectedTabName || NEW_PATCH;
+  const viewingNewPatch = tab.toLowerCase() === NEW_PATCH.toLowerCase();
+  // Keep the dropdown's New Patch date label fresh on every Update click even when
+  // viewing a different tab, by fetching New Patch's grid alongside the selected one.
+  const newPatchDateFetch = viewingNewPatch ? null :
+    fetchSheetGrid(game.sheetId, NEW_PATCH).then(g => parseSummary(g).date).catch(() => null);
+  // Ground-truth column A (see fetchColumnA) for the "No." -> exact row deep links —
+  // fetched alongside the main grid; silently unavailable without an API key or if the
+  // request fails, in which case No. just falls back to plain (non-clickable) text.
+  const colAFetch = apiKey ? fetchColumnA(game.sheetId, tab).catch(() => null) : Promise.resolve(null);
+
+  try{
+    const grid = await fetchSheetGrid(game.sheetId, tab);
+    const summary = parseSummary(grid);
+    const detail = parseDetailTable(grid);
+    if(detail.passCount !== null) summary.pass = detail.passCount;
+    summary.lsPass = detail.lsPass || 0;
+    summary.lsFail = detail.lsFail || 0;
+    if(viewingNewPatch && summary.date && summary.date !== '-'){
+      game.newPatchDate = summary.date;
+      renderTabRow();
+    }
+    if(newPatchDateFetch){
+      const npDate = await newPatchDateFetch;
+      if(npDate && npDate !== '-'){ game.newPatchDate = npDate; renderTabRow(); }
+    }
+    const colA = await colAFetch;
+    const noRowMap = colA ? buildNoRowMap(detail.rows, colA) : null;
+    renderReport(game, summary, detail, tab, noRowMap);
+    // Log any Fail rows from this fetch into the permanent per-game history, then
+    // refresh the badge count and (if the panel happens to be open) its table too.
+    recordFailHistory(game.id, tab, detail, summary.date);
+    updateFailHistoryBadge();
+    if(!failHistoryPanel.classList.contains('hidden')) renderFailHistoryPanel();
+    const now = new Date();
+    lastUpdated.textContent = 'อัปเดตล่าสุด: ' + now.toLocaleString('th-TH');
+    if(syncMsg) showBanner(syncMsg.type, syncMsg.text);
+  }catch(err){
+    console.error(err);
+    showBanner('error', `⚠ ไม่สามารถดึงข้อมูลจากแท็บ "${escapeHtml(tab)}" ของ "${escapeHtml(game.name)}" ได้ — ${escapeHtml(err.message || err)}. ตรวจสอบว่าชีทเปิดสิทธิ์ "ทุกคนที่มีลิงก์ (ดูได้)" และชื่อแท็บนี้มีอยู่จริงในชีท`);
+  } finally {
+    updateBtn.disabled = false;
+    updateBtn.innerHTML = '⟳ อัปเดตข้อมูล';
+  }
+}
+
+// init
+renderGameSelect();
+renderChips();
+renderTabRow();
+renderTabManageList();
+updateFailHistoryBadge();
+if(selectedGameId) fetchAndRender();
+else showBanner('info','ยังไม่มีเกมในระบบ กรุณาเพิ่มเกมก่อน');
+</script>
+</body>
+</html>
