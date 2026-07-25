@@ -312,8 +312,13 @@ async function fetchFailHistoryFromBackend(gameId){
 function mergeBackendEntries(gameId, entries){
   if(!entries) return;
   const all = loadFailHistory();
-  const gameLog = all[gameId] || (all[gameId] = {});
+  // REPLACE this game's local cache with the backend's copy rather than layering on top
+  // of it. The backend is the shared source of truth once we've successfully reached it,
+  // so any stale/duplicate entries left over in this browser's local cache (e.g. from
+  // before a backend bug was fixed) get cleared out here instead of lingering forever.
+  const gameLog = {};
   entries.forEach(e => { if(e && e.tab && e.no !== undefined) gameLog[e.tab + '::' + e.no] = e; });
+  all[gameId] = gameLog;
   saveFailHistory(all);
 }
 // Pulls the shared backend's copy of this game's history into the local cache — call
@@ -359,6 +364,15 @@ function recordFailHistory(gameId, tab, detail, patchDate){
   const lsIdx = detail.headers.indexOf('Result (LS)');
   const noteIdx = detail.headers.indexOf('Note');
 
+  // "New Patch" is a moving target — the sheet reuses that literal tab name across many
+  // different actual patch cycles as work is in progress. Keying/storing entries under
+  // the literal word "New Patch" would make a later patch's Fail rows silently overwrite
+  // an earlier patch's Fail rows for the same No., defeating the point of a history that's
+  // meant to survive past patches. Once the real patch date is known, record under THAT
+  // instead — same value the panel already prefers for display via displayDate().
+  const isNewPatch = tab.trim().toLowerCase() === NEW_PATCH.toLowerCase();
+  const effectiveTab = (isNewPatch && patchDate && patchDate !== '-') ? patchDate : tab;
+
   const all = loadFailHistory();
   const gameLog = all[gameId] || (all[gameId] = {});
   const now = new Date().toISOString();
@@ -367,10 +381,10 @@ function recordFailHistory(gameId, tab, detail, patchDate){
   detail.rows.forEach(row => {
     if((row[resultIdx] || '').trim().toLowerCase() !== 'fail') return;
     const no = row[0] || '';
-    const key = tab + '::' + no;
+    const key = effectiveTab + '::' + no;
     const existing = gameLog[key];
     gameLog[key] = {
-      no, tab, patchDate: patchDate || '',
+      no, tab: effectiveTab, patchDate: patchDate || '',
       resultITS: row[resultIdx] || '',
       remark: remarkIdx !== -1 ? (row[remarkIdx] || '') : '',
       resultLS: lsIdx !== -1 ? (row[lsIdx] || '') : '',
