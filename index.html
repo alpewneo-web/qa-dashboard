@@ -432,7 +432,7 @@ function recordFailHistory(gameId, tab, detail, patchDate){
     const no = row[0] || '';
     const key = effectiveDate + '::' + no;
     const existing = gameLog[key];
-    gameLog[key] = {
+    const nextEntry = {
       no, patchDate: effectiveDate,
       resultITS: row[resultIdx] || '',
       remark: remarkIdx !== -1 ? (row[remarkIdx] || '') : '',
@@ -441,10 +441,22 @@ function recordFailHistory(gameId, tab, detail, patchDate){
       firstSeenAt: existing ? existing.firstSeenAt : now,
       lastSeenAt: now
     };
+    // Only push to the shared backend when the visible content actually differs from
+    // what we already have — otherwise every re-render (every "อัปเดตข้อมูล" click, every
+    // tab view) re-sends identical rows unnecessarily, flooding the Apps Script execution
+    // queue and delaying the AI analyze call behind a pile of no-op writes.
+    const contentChanged = !existing
+      || existing.resultITS !== nextEntry.resultITS
+      || existing.remark !== nextEntry.remark
+      || existing.resultLS !== nextEntry.resultLS
+      || existing.note !== nextEntry.note;
+    gameLog[key] = nextEntry;
     changed = true;
-    // Push to the shared backend too (fire-and-forget) so everyone else's dashboard
-    // converges on this same entry next time they sync — no-op if no endpoint is set.
-    pushFailHistoryEntry(gameId, gameLog[key]);
+    if(contentChanged){
+      // Push to the shared backend too (fire-and-forget) so everyone else's dashboard
+      // converges on this same entry next time they sync — no-op if no endpoint is set.
+      pushFailHistoryEntry(gameId, nextEntry);
+    }
   });
 
   if(changed) saveFailHistory(all);
