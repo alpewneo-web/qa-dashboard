@@ -205,6 +205,10 @@
       <button class="btn-ghost" id="clearFailHistoryBtn">🗑 ล้างประวัติของเกมนี้ (ทุกคน)</button>
     </div>
     <div id="failHistoryTableWrap" style="margin-top:12px;"></div>
+    <div id="aiAnalysisBox" class="hidden" style="margin-top:16px; padding:14px; border:1px solid var(--accent); border-radius:10px; background:rgba(99,102,241,.08);">
+      <div style="display:flex; align-items:center; gap:8px; font-weight:600;">🤖 คำแนะนำจาก AI <span id="aiAnalysisUpdated" class="meta"></span></div>
+      <div id="aiAnalysisText" class="meta" style="margin-top:8px; white-space:pre-wrap; color:var(--text);"></div>
+    </div>
   </div>
 </div>
 
@@ -353,6 +357,52 @@ async function clearFailHistoryOnBackend(gameId){
   }catch(e){}
 }
 
+// ---- AI analysis of Fail History (optional — backend only calls the AI when the shared
+// Google Sheets API key's Fail History endpoint is configured AND a Gemini key has been
+// set up server-side; see Code.gs). Cached per game in memory for this page session so
+// switching tabs/panels doesn't re-flash empty while a fresh check is still in flight. ----
+let aiAnalysisCache = {}; // gameId -> { text, updatedAt }
+
+async function requestAiAnalysis(gameId){
+  if(!FAIL_HISTORY_ENDPOINT || !gameId) return null;
+  try{
+    const res = await fetch(FAIL_HISTORY_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action:'analyze', token:FAIL_HISTORY_TOKEN, gameId })
+    });
+    if(!res.ok) return null;
+    return await res.json();
+  }catch(e){ return null; }
+}
+
+function renderAiAnalysis(gameId){
+  const cached = aiAnalysisCache[gameId];
+  if(!cached || !cached.text){
+    aiAnalysisBox.classList.add('hidden');
+    return;
+  }
+  aiAnalysisBox.classList.remove('hidden');
+  aiAnalysisText.textContent = cached.text;
+  aiAnalysisUpdated.textContent = cached.updatedAt ? ('· อัปเดตล่าสุด ' + formatDateTime(cached.updatedAt)) : '';
+}
+
+// Fire-and-forget, called after every Fail History sync — asks the backend to analyze
+// this game's Fail History for recurring patterns and prevention/fix suggestions
+// (Gemini-powered, see Code.gs). Only actually calls the AI when the data changed since
+// the last check (cost control, handled server-side); otherwise just returns the cached
+// text instantly. Never blocks the "อัปเดตข้อมูล" button and never shows an alarming
+// error — if the AI isn't set up yet on the backend, this quietly does nothing.
+async function runAiAnalysis(gameId){
+  const result = await requestAiAnalysis(gameId);
+  if(!result || result.empty || !result.analysis) return;
+  aiAnalysisCache[gameId] = { text: result.analysis, updatedAt: result.updatedAt || new Date().toISOString() };
+  if(currentGame() && currentGame().id === gameId) renderAiAnalysis(gameId);
+  if(result.changed){
+    showBanner('info', '🤖 AI พบรูปแบบใหม่จากประวัติ Fail — ดูคำแนะนำได้ที่ "📋 ประวัติ Fail" ด้านล่างตาราง');
+  }
+}
+
 // Scans a freshly-parsed detail table for Fail rows and upserts each into the log.
 // Only ADDS/UPDATES entries — a case that was Fail and is now Pass on this same tab
 // simply stops being touched here, so its last-known-Fail snapshot stays in the log.
@@ -464,6 +514,9 @@ const failHistorySearch = document.getElementById('failHistorySearch');
 const failHistoryTableWrap = document.getElementById('failHistoryTableWrap');
 const clearFailHistoryBtn = document.getElementById('clearFailHistoryBtn');
 const failHistorySyncStatus = document.getElementById('failHistorySyncStatus');
+const aiAnalysisBox = document.getElementById('aiAnalysisBox');
+const aiAnalysisText = document.getElementById('aiAnalysisText');
+const aiAnalysisUpdated = document.getElementById('aiAnalysisUpdated');
 
 // Only show a value in the box when the user has their own override saved — the shared
 // default key is used silently in the background and isn't echoed into this field.
@@ -574,6 +627,7 @@ function renderFailHistoryPanel(){
   const g = currentGame();
   failHistoryGameName.textContent = g ? g.name : '-';
   updateFailHistoryBadge();
+  if(g) renderAiAnalysis(g.id); else aiAnalysisBox.classList.add('hidden');
   if(!g){ failHistoryTableWrap.innerHTML = `<div class="empty-note">ยังไม่ได้เลือกเกม</div>`; return; }
 
   // Fail History no longer tracks a separate "tab" field at all — only the resolved
@@ -644,6 +698,9 @@ failHistoryBtn.addEventListener('click', async ()=>{
         ? '✅ ข้อมูลนี้ share ร่วมกันทุกคนที่ใช้แดชบอร์ดนี้'
         : '⚠ ซิงค์กับข้อมูลกลางไม่สำเร็จ — แสดงเฉพาะข้อมูลในเครื่องนี้';
       renderFailHistoryPanel();
+      // Fire-and-forget: check for a fresh AI analysis too (uses the cached result
+      // instantly via renderFailHistoryPanel() above; this just checks if it's stale).
+      runAiAnalysis(g.id);
     } else {
       failHistorySyncStatus.textContent = '';
     }
@@ -1215,6 +1272,11 @@ async function fetchAndRender(){
     const now = new Date();
     lastUpdated.textContent = 'อัปเดตล่าสุด: ' + now.toLocaleString('th-TH');
     if(syncMsg) showBanner(syncMsg.type, syncMsg.text);
+    // Fire-and-forget: ask the AI to check this game's Fail History for new patterns.
+    // Not awaited — this can take a few seconds (external AI call) and must never delay
+    // re-enabling the "อัปเดตข้อมูล" button. Runs after the sync-status banner above so
+    // its own notification (if any) isn't immediately overwritten.
+    runAiAnalysis(game.id);
   }catch(err){
     console.error(err);
     showBanner('error', `⚠ ไม่สามารถดึงข้อมูลจากแท็บ "${escapeHtml(tab)}" ของ "${escapeHtml(game.name)}" ได้ — ${escapeHtml(err.message || err)}. ตรวจสอบว่าชีทเปิดสิทธิ์ "ทุกคนที่มีลิงก์ (ดูได้)" และชื่อแท็บนี้มีอยู่จริงในชีท`);
