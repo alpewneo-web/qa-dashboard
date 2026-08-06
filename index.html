@@ -852,6 +852,19 @@ const isNoteLike = v => v !== '' && !/^https?:\/\//i.test(v);
 
 const isPercentLike = v => /^\d+(\.\d+)?%$/.test(v);
 
+// Shared low-level conversion: Sheets/Excel date serial number -> "dd-mm-yyyy", with NO
+// plausibility range check. Used both to recover a genuine date (serialToDateString,
+// which adds its own range guard below) and, separately, to recognize when a small
+// integer like a column-position label (1, 8, 9...) has been mangled into a date string
+// by the exact same Sheets quirk (see looksLikeSyntheticHeaderRow).
+function serialToDdMmYyyy(n){
+  const ms = Math.round((n - 25569) * 86400 * 1000); // serial -> Unix ms (UTC midnight)
+  const d = new Date(ms);
+  const dd = String(d.getUTCDate()).padStart(2,'0');
+  const mm = String(d.getUTCMonth()+1).padStart(2,'0');
+  return `${dd}-${mm}-${d.getUTCFullYear()}`;
+}
+
 // Google's gviz endpoint normally gives cellValue() a nicely formatted string ("f") for
 // a date cell, which is what lets isDateLike() match it. But if the source cell's number
 // format isn't actually a date format (e.g. someone pasted the date in as plain text/
@@ -863,11 +876,7 @@ const isPercentLike = v => /^\d+(\.\d+)?%$/.test(v);
 function serialToDateString(v){
   const n = Number(v);
   if(!Number.isFinite(n) || n < 20000 || n > 80000) return null; // plausible Sheets-serial range
-  const ms = Math.round((n - 25569) * 86400 * 1000); // serial -> Unix ms (UTC midnight)
-  const d = new Date(ms);
-  const dd = String(d.getUTCDate()).padStart(2,'0');
-  const mm = String(d.getUTCMonth()+1).padStart(2,'0');
-  return `${dd}-${mm}-${d.getUTCFullYear()}`;
+  return serialToDdMmYyyy(n);
 }
 
 function parseSummary(grid){
@@ -962,13 +971,25 @@ function parseDetailTable(grid){
 // A synthetic gviz header row has cells whose text is just their own 1-based column
 // position ("","2","3","4",... — column A's own label is blank, B="2", C="3", etc.).
 // A real data row essentially never matches that pattern by coincidence.
+//
+// Gotcha: small numbers like 8 and 9 fall in Sheets' valid date-serial range (day 8/9 of
+// the epoch = 07-01-1900 / 08-01-1900), so if the source cell's number format happens to
+// be a date format instead of plain number/General, gviz hands back "07-01-1900" instead
+// of the plain "8" — the exact same formatting quirk documented above for real dates, just
+// hitting this synthetic label row instead. A strict `row[i] === String(i+1)` check then
+// wrongly rejects an otherwise-clear synthetic row over one or two mangled cells, and the
+// undetected row goes on to pollute every findFirst() scan downstream (wrong Fail/Drop
+// counts, wrong patch date — seen in practice on a real "ToSM" sheet). So a cell counts as
+// a match if it equals its column position as plain text OR as that position's mangled
+// date string.
 function looksLikeSyntheticHeaderRow(row){
   if(!row || row.length < 5) return false;
   let checked = 0, matches = 0;
   for(let i=1; i<Math.min(row.length,10); i++){
     if(row[i] === '') continue;
     checked++;
-    if(row[i] === String(i+1)) matches++;
+    const expected = i + 1;
+    if(row[i] === String(expected) || row[i] === serialToDdMmYyyy(expected)) matches++;
   }
   return checked >= 3 && matches === checked;
 }
